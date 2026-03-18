@@ -1,0 +1,13 @@
+id: H000016
+slug: card-sorting
+title: "Card Sorting Task (WCST-style)"
+acquisition: behavior
+variant: html
+cognitive_domain:
+  - cognitive_flexibility
+maturity: prototype
+version:
+  release_tag: "0.1.0"
+contracts:
+  psyflow_web_taps: v0.1.0
+maintainer: []
