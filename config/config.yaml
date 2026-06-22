@@ -31,8 +31,8 @@ task:
   voice_enabled: true
   delta: 1
   total_blocks: 3
-  total_trials: 24
-  trial_per_block: 8
+  total_trials: 96
+  trial_per_block: 32
   conditions: [color, shape, number]
   key_list: ["1", "2", "3", "4"]
   seed_mode: same_across_sub
