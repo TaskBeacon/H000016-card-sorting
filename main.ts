@@ -19,7 +19,7 @@ import {
 
 import configText from "./config/config.yaml?raw";
 import { run_trial } from "./src/run_trial";
-import { summarizeBlock, summarizeTotalScore } from "./src/utils";
+import { cardConditionToTrialSpec, generateCardSortingConditions, summarizeBlock, summarizeTotalScore } from "./src/utils";
 
 const instructionVoiceAsset = new URL("./assets/instruction_text_voice.mp3", import.meta.url).href;
 
@@ -110,15 +110,20 @@ export async function run(root: HTMLElement): Promise<void> {
           settings,
           n_trials: trialPerBlock
         }).generate_conditions({
-          func: (nTrials: number) => new Array(Math.max(1, Number(nTrials))).fill(rule)
+          func: (nTrials: number, _labels: string[], seed: number) =>
+            generateCardSortingConditions(nTrials, [rule], {
+              seed,
+              key_list: (settings.key_list as string[]).map(String)
+            })
         });
 
         block.conditions.forEach((condition, trialIndex) => {
+          const trialSpec = cardConditionToTrialSpec(condition);
           const trial = new TrialBuilder({
             trial_id: next_trial_id(),
             block_id: block.block_id,
             trial_index: trialIndex,
-            condition
+            condition: trialSpec.rule
           });
           run_trial(trial, condition, {
             settings,

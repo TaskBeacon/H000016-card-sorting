@@ -28,7 +28,7 @@ task:
   save_path: ./outputs/human
   language: Chinese
   voice_name: zh-CN-YunyangNeural
-  voice_enabled: true
+  voice_enabled: false
   delta: 1
   total_blocks: 3
   total_trials: 96

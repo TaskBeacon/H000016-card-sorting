@@ -1,29 +1,10 @@
-import type { ReducedTrialRow } from "psyflow-web";
+import { PythonRandom, type ReducedTrialRow } from "psyflow-web";
 
 const COLORS = ["RED", "GREEN", "BLUE", "YELLOW"] as const;
 const SHAPES = ["CIRCLE", "TRIANGLE", "STAR", "SQUARE"] as const;
 const NUMBERS = [1, 2, 3, 4] as const;
 
 const VALID_RULES = new Set(["color", "shape", "number"] as const);
-
-function makeSeededRandom(seed: number): () => number {
-  let value = seed >>> 0;
-  return () => {
-    value = (value + 0x6d2b79f5) >>> 0;
-    let t = Math.imul(value ^ (value >>> 15), 1 | value);
-    t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function shuffle<T>(values: readonly T[], rng: () => number): T[] {
-  const result = [...values];
-  for (let index = result.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(rng() * (index + 1));
-    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
-  }
-  return result;
-}
 
 function toTargetImagePath(color: string, shape: string, number: number): string {
   return `assets/cards/targets/target_color-${color.toLowerCase()}_shape-${shape.toLowerCase()}_number-${number}.png`;
@@ -38,6 +19,8 @@ export interface CardTrialSpec {
   correct_key: string;
   target_image: string;
 }
+
+type EncodedCardTrialSpec = CardTrialSpec & { kind: "card_sorting_trial" };
 
 export function normalizeRule(rule: string): "color" | "shape" | "number" {
   const value = String(rule).trim().toLowerCase();
@@ -60,8 +43,8 @@ export function sampleCardTrialSpec(
     throw new Error(`Card sorting requires exactly 4 response keys, got ${JSON.stringify(keys)}`);
   }
 
-  const rng = makeSeededRandom(Math.trunc(options.seed));
-  const [colorIndex, shapeIndex, numberIndex] = shuffle([0, 1, 2, 3], rng);
+  const rng = new PythonRandom(Math.trunc(options.seed));
+  const [colorIndex, shapeIndex, numberIndex] = rng.shuffle([0, 1, 2, 3]);
   const correctIndex =
     normalizedRule === "color"
       ? colorIndex
@@ -81,6 +64,73 @@ export function sampleCardTrialSpec(
     correct_key: keys[correctIndex],
     target_image: toTargetImagePath(targetColor, targetShape, targetNumber)
   };
+}
+
+export function encodeCardTrialSpec(spec: CardTrialSpec): string {
+  return JSON.stringify({
+    kind: "card_sorting_trial",
+    ...spec
+  } satisfies EncodedCardTrialSpec);
+}
+
+export function cardConditionToTrialSpec(condition: string): CardTrialSpec {
+  const value = String(condition);
+  if (value.trim().startsWith("{")) {
+    const parsed = JSON.parse(value) as Partial<EncodedCardTrialSpec>;
+    if (parsed.kind === "card_sorting_trial") {
+      return {
+        rule: normalizeRule(String(parsed.rule)),
+        condition_id: String(parsed.condition_id),
+        target_color: String(parsed.target_color),
+        target_shape: String(parsed.target_shape),
+        target_number: Number(parsed.target_number),
+        correct_key: String(parsed.correct_key),
+        target_image: String(parsed.target_image)
+      };
+    }
+  }
+  return sampleCardTrialSpec(value, {
+    key_list: ["1", "2", "3", "4"],
+    seed: 0
+  });
+}
+
+export function generateCardSortingConditions(
+  nTrials: number,
+  conditionLabels: string[] = ["color", "shape", "number"],
+  options: {
+    seed?: number;
+    key_list?: string[];
+  } = {}
+): string[] {
+  const labels = conditionLabels.map((label) => normalizeRule(String(label)));
+  if (labels.length === 0) {
+    throw new Error("Card sorting condition labels cannot be empty.");
+  }
+  const keys = (options.key_list ?? ["1", "2", "3", "4"]).map(String);
+  if (keys.length !== 4) {
+    throw new Error(`Card sorting requires exactly 4 response keys, got ${JSON.stringify(keys)}`);
+  }
+
+  const rng = new PythonRandom(Math.trunc(options.seed ?? 0));
+  const ruleSchedule: string[] = [];
+  while (ruleSchedule.length < Math.trunc(nTrials)) {
+    ruleSchedule.push(...labels);
+  }
+  const scheduledRules = ruleSchedule.slice(0, Math.trunc(nTrials));
+  if (labels.length > 1) {
+    rng.shuffle(scheduledRules);
+  }
+
+  return scheduledRules.map((rule) => {
+    const trialSeed = 1 + rng.randBelow(2 ** 31 - 1);
+    return encodeCardTrialSpec(
+      sampleCardTrialSpec(rule, {
+        key_list: keys,
+        seed: trialSeed
+      })
+    );
+  });
 }
 
 export function summarizeBlock(
